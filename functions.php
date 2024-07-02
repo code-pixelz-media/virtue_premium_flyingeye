@@ -95,9 +95,9 @@ add_filter('woocommerce_get_settings_pages', 'flying_eye_custom_woocommerce_sett
 function flying_eye_custom_woocommerce_settings_tab($settings)
 {
 
-    if (!class_exists('WC_Settings_Custom_Tab')) {
+    if (!class_exists('WC_Settings_Inventory_Setting')) {
 
-        class WC_Settings_Custom_Tab extends WC_Settings_Page
+        class WC_Settings_Inventory_Setting extends WC_Settings_Page
         {
             function __construct()
             {
@@ -106,7 +106,7 @@ function flying_eye_custom_woocommerce_settings_tab($settings)
                 parent::__construct();
             }
         }
-        $settings[] = new WC_Settings_Custom_Tab();
+        $settings[] = new WC_Settings_Inventory_Setting();
     }
 
     return $settings;
@@ -119,13 +119,13 @@ add_filter('woocommerce_get_settings_inventory_setting', 'flying_eye_custom_wooc
 function flying_eye_custom_woocommerce_settings_tab_settings($settings, $current_section)
 {
     $order_statuses_options = get_woocommerce_order_statuses_options();
+    $roles_options = get_wp_roles_options();
     $settings = array(
         array(
             'title' => 'Inventory Setting',
             'desc' => 'Change Inventory for Order Status:',
             'type' => 'title',
         ),
-
         array(
             'name' => 'Physical Stock',
             'type' => 'inventory_select2',
@@ -147,12 +147,33 @@ function flying_eye_custom_woocommerce_settings_tab_settings($settings, $current
             'autoload' => false,
         ),
         array(
+            'name' => 'Read/Write',
+            'type' => 'inventory_select2',
+            'id' => 'inventory_read_write_select_1',
+            'default' => '',
+            'options' => $roles_options,
+            'desc' => 'Add role for read/write permission',
+            'desc_tip' => 'Selected option will be the given permission for read/write.',
+            'autoload' => false,
+        ),
+        array(
+            'name' => 'Read',
+            'type' => 'inventory_select2',
+            'id' => 'inventory_read_select_1',
+            'default' => '',
+            'options' => $roles_options,
+            'desc' => 'Add role for read permission',
+            'desc_tip' => 'Selected option will be the given permission for read.',
+            'autoload' => false,
+        ),
+        array(
             'type' => 'sectionend',
         ),
     );
 
     return $settings;
 }
+
 
 
 add_action('woocommerce_admin_field_inventory_select2', 'render_inventory_select2_field');
@@ -194,38 +215,69 @@ function get_woocommerce_order_statuses_options()
     }
     return $options;
 }
+function get_wp_roles_options()
+{
+    // Get all roles
+    global $wp_roles;
+    $roles_options = [];
+    foreach ($wp_roles->roles as $role_key => $role) {
+        $roles_options[$role_key] = $role['name'];
+    }
+    return $roles_options;
+}
 
 // Add a custom column to the product listing page
 add_filter('manage_edit-product_columns', 'add_inventory_column', 10, 1);
 function add_inventory_column($columns)
 {
+    $current_user = wp_get_current_user();
+    $user_roles = $current_user->roles;
+    $read_write_permission = get_option('inventory_read_write_select_1');
+    $read_permission = get_option('inventory_read_select_1');
     // Add a new column after the stock column
-    $new_columns = [];
-    foreach ($columns as $key => $column) {
-        $new_columns[$key] = $column;
-        if ('is_in_stock' === $key) {
-            $new_columns['inventory'] = __('Inventory', 'woocommerce');
+    if (array_intersect($user_roles, $read_write_permission) || array_intersect($user_roles, $read_permission)) {
+        $new_columns = [];
+        foreach ($columns as $key => $column) {
+            $new_columns[$key] = $column;
+            if ('is_in_stock' === $key) {
+                $new_columns['inventory'] = __('Inventory', 'woocommerce');
+            }
         }
+        return $new_columns;
     }
-    return $new_columns;
+    return $columns;
 }
 
 // Populate the custom column with inventory data
 add_action('manage_product_posts_custom_column', 'populate_inventory_column', 10, 2);
 function populate_inventory_column($column, $post_id)
 {
+    $current_user = wp_get_current_user();
+    $user_roles = $current_user->roles;
+    $read_write_permission = get_option('inventory_read_write_select_1');
+    if (array_intersect($user_roles, $read_write_permission)) { ?>
+        <style>
+            #the-list tr:hover .inventory.column-inventory span::after {
+                content: 'Edit';
+                margin-left: 10px;
+                color: #2271B1;
+            }
+        </style>
+    <?php
+    }
     if ('inventory' === $column) {
         $physical_stock = get_post_meta($post_id, '_physical_stock', true) ? get_post_meta($post_id, '_physical_stock', true) : get_post_meta($post_id, '_stock', true); ?>
         <span style="width:55px;cursor: pointer;padding: 10px 25px;" id="inventory_number_product_list_<?php echo $post_id; ?>" data-product_id="<?php echo $post_id; ?>" class="inventory_number_product_list"><?php echo $physical_stock; ?> </span>
-    
-        <div class="admin-tooltip" id="admin-tooltip_<?php echo $post_id; ?>">
-            <input type="number" name="inv_number" value="<?php echo $physical_stock; ?>" class="inv_number" data-product_id="<?php echo $post_id; ?>">
-            <div class="admin-tooltip-btns">
-                <input type="button" class="button button-danger inven-cancel-btn" value="close">
-                <input type="button" class="button button-primary inven-submit-btn" value="update">
+        <?php if (array_intersect($user_roles, $read_write_permission)) { ?>
+            <div class="admin-tooltip" id="admin-tooltip_<?php echo $post_id; ?>">
+                <input type="number" name="inv_number" value="<?php echo $physical_stock; ?>" class="inv_number" data-product_id="<?php echo $post_id; ?>">
+                <div class="admin-tooltip-btns">
+                    <input type="button" class="button button-danger inven-cancel-btn" value="close">
+                    <input type="button" class="button button-primary inven-submit-btn" value="update">
+                </div>
             </div>
-        </div>
 <?php
+        }
     }
 }
 
@@ -238,7 +290,7 @@ function update_inventory_number()
     $inventory_number = $_POST['inventory_number'];
     $product_id = $_POST['product_id'];
     update_post_meta($product_id, '_physical_stock', $inventory_number);
-    $response = array('number' => $inventory_number,'product' => $product_id);
-    wp_send_json_success($response,200);
+    $response = array('number' => $inventory_number, 'product' => $product_id);
+    wp_send_json_success($response, 200);
     die();
 }

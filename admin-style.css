@@ -19,8 +19,8 @@
 .admin-tooltip .button-danger:hover {
     color: #fff;
 }
-#the-list tr:hover .inventory.column-inventory span::after{
+/* #the-list tr:hover .inventory.column-inventory span::after{
     content: 'Edit';
     margin-left: 10px;
     color: #2271B1 ;
-}
+} */
