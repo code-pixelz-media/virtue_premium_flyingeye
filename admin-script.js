@@ -27,3 +27,32 @@ jQuery(document).ready(function () {
     jQuery(this).parent().parent().css('display','none');
   });
 });
+
+jQuery(document).ready(function($) {
+  $('body').on('change', '.variable_manage_stock', function() {
+      var parent = $(this).closest('.woocommerce_variation');
+      if ($(this).is(':checked')) {
+          parent.find('.form-row[data-id^="physical_variation_inventory"]').show();
+      } else {
+          parent.find('.form-row[data-id^="physical_variation_inventory"]').hide();
+      }
+  }).change();
+});
+
+jQuery(document).ready(function($) {
+  function toggleVirtualStockField() {
+      if ($('#_manage_stock').is(':checked')) {
+          $('#virtual_stock_field').show();
+      } else {
+          $('#virtual_stock_field').hide();
+      }
+  }
+
+  // Initial check
+  toggleVirtualStockField();
+
+  // Check on change
+  $('#_manage_stock').change(function() {
+      toggleVirtualStockField();
+  });
+});

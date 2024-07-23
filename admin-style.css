@@ -24,3 +24,22 @@
     margin-left: 10px;
     color: #2271B1 ;
 } */
+
+
+.woocommerce_variation .form-row[data-id^="physical_variation_inventory"] {
+    display: none;
+}
+form.shop-inventory-form input[type='submit'] {
+    float: left;
+    margin-top: 10px;
+}
+.shop-inventory-table-pagination {
+    float: right;
+    clear: none;
+}
+.shop-inventory-table-pagination .button {
+    margin: 0 2px !important;
+}
+.shop-inventory-body td div input {
+    margin: 5px 0;
+}
