@@ -55,17 +55,6 @@ function add_physical_stock_field()
             'min' => '0'
         )
     ));
-    // woocommerce_wp_text_input(array(
-    //     'id' => '_virtual_stock',
-    //     'label' => __('Virtual Stock', 'woocommerce'),
-    //     'desc_tip' => true,
-    //     'description' => __('Enter the Virtual stock quantity.', 'woocommerce'),
-    //     'type' => 'number',
-    //     'custom_attributes' => array(
-    //         'step' => 'any',
-    //         'min' => '0'
-    //     )
-    // ));
 }
 
 // Save Physical Stock field
@@ -73,9 +62,7 @@ add_action('woocommerce_process_product_meta', 'save_physical_stock_field');
 function save_physical_stock_field($post_id)
 {
     $physical_stock = isset($_POST['_physical_stock']) ? wc_clean($_POST['_physical_stock']) : '';
-    // $virtual_stock = isset($_POST['_virtual_stock']) ? wc_clean($_POST['_virtual_stock']) : '';
     update_post_meta($post_id, '_physical_stock', $physical_stock);
-    // update_post_meta($post_id, '_virtual_stock', $virtual_stock);
 }
 
 
@@ -93,6 +80,7 @@ function update_stock_on_order_status_change($order_id, $old_status, $new_status
         }
     }
 
+    // check if new status is in the list of virtual staus list
     if (in_array($new_status, $virtual_status_list)) {
         // Check if stock has already been updated for this order
         $stock_updated = get_post_meta($order_id, '_virtual_stock_updated', true);
@@ -146,6 +134,7 @@ function update_stock_on_order_status_change($order_id, $old_status, $new_status
         }
     }
 
+    // check if new status is in the list of physical staus list
     if (in_array($new_status, $physical_status_list)) {
         // Check if stock has already been updated for this order
         $stock_updated = get_post_meta($order_id, '_physical_stock_updated', true);
@@ -167,10 +156,45 @@ function update_stock_on_order_status_change($order_id, $old_status, $new_status
             $physical_stock = (int)$physical_stock;
             $new_physical_stock = max(0, $physical_stock - $quantity); // Ensure stock doesn't go below 0
             update_post_meta($product_id, '_physical_stock', $new_physical_stock);
+
+            //if an order is directly set from “Devis” (not listed in the parameters Inventory Setting) to “Terminé” (completed) which is listed in PHysical Stock, then both Physical and Virtual stock should be decreased.
+            if ($new_status == 'completed') {
+                $virtual_stock = get_post_meta($product_id, '_virtual_stock', true);
+                $virtual_stock = (int)$virtual_stock;
+                $new_virtual_stock = max(0, $virtual_stock - $quantity); // Ensure stock doesn't go below 0
+                update_post_meta($product_id, '_virtual_stock', $new_virtual_stock);
+                update_post_meta($product_id, '_stock', $new_virtual_stock);
+            }
         }
 
         // Mark the order as having had its stock updated
         update_post_meta($order_id, '_physical_stock_updated', 'yes');
+    }
+
+    //if new satus is refunded, stock increased by the quentity
+    if ($new_status == 'refunded') {
+        $order = wc_get_order($order_id);
+        foreach ($order->get_items() as $item) {
+            $product_id = $item->get_product_id();
+            $quantity = $item->get_quantity();
+
+            $physical_stock = get_post_meta($product_id, '_physical_stock', true);
+
+            if (empty($physical_stock) || !is_numeric($physical_stock) || $physical_stock < 0) {
+                continue; // Skip if $physical_stock is empty, not numeric, or less than 0
+            }
+
+            $physical_stock = (int)$physical_stock;
+            $new_physical_stock = max(0, $physical_stock + $quantity); // Ensure stock doesn't go below 0
+            update_post_meta($product_id, '_physical_stock', $new_physical_stock);
+
+
+            $virtual_stock = get_post_meta($product_id, '_virtual_stock', true);
+            $virtual_stock = (int)$virtual_stock;
+            $new_virtual_stock = max(0, $virtual_stock + $quantity); // Ensure stock doesn't go below 0
+            update_post_meta($product_id, '_virtual_stock', $new_virtual_stock);
+            update_post_meta($product_id, '_stock', $new_virtual_stock);
+        }
     }
 }
 
@@ -459,7 +483,7 @@ function reduce_physical_variation_inventory_on_status_change($order_id, $old_st
         $additional_status[] = str_replace('wc-', '', $choosen_stat);
     }
 
-
+    // check if new status is in the physical status list
     if (in_array($new_status, $additional_status)) {
         // Check if stock has already been updated for this order
         // $stock_updated = get_post_meta($order_id, '_physical_stock_updated', true);
@@ -475,6 +499,15 @@ function reduce_physical_variation_inventory_on_status_change($order_id, $old_st
             if ($_physical_variation_inventory && $_physical_variation_inventory > 0) {
                 $new_inventory = max(0, $_physical_variation_inventory - $quantity);
                 update_post_meta($variation_id, '_physical_variation_inventory', $new_inventory);
+
+                //if an order is directly set from “Devis” (not listed in the parameters Inventory Setting) to “Terminé” (completed) which is listed in PHysical Stock, then both Physical and Virtual stock should be decreased.
+                if ($new_status == 'completed') {
+                    $virtual_stock = get_post_meta($variation_id, '_virtual_variation_inventory', true);
+                    $virtual_stock = (int)$virtual_stock;
+                    $new_virtual_stock = max(0, $virtual_stock - $quantity); // Ensure stock doesn't go below 0
+                    update_post_meta($variation_id, '_virtual_variation_inventory', $new_virtual_stock);
+                    update_post_meta($variation_id, '_stock', $new_virtual_stock);
+                }
             }
         }
         // Mark the inventory as reduced
@@ -488,6 +521,7 @@ function reduce_physical_variation_inventory_on_status_change($order_id, $old_st
         $additional_virtual_status[] = str_replace('wc-', '', $choosen_virtual_stat);
     }
 
+    // check if new status is in the virtual status list
     if (in_array($new_status, $additional_virtual_status)) {
         // Check if stock has already been updated for this order
         // $stock_updated = get_post_meta($order_id, '_virtual_stock_updated', true);
@@ -514,6 +548,23 @@ function reduce_physical_variation_inventory_on_status_change($order_id, $old_st
             $_virtual_variation_inventory = get_post_meta($variation_id, '_virtual_variation_inventory', true);
             // Assuming $_virtual_variation_inventory should be used to update _stock
             update_post_meta($variation_id, '_stock', $_virtual_variation_inventory);
+        }
+    }
+
+    //if new satus is refunded, stock increased by the quentity
+    if ($new_status == 'refunded') {
+        foreach ($order->get_items() as $item_id => $item) {
+            $variation_id = $item->get_variation_id();
+            $quantity = $item->get_quantity();
+
+            $_virtual_variation_inventory = get_post_meta($variation_id, '_virtual_variation_inventory', true);
+            $new_inventory = max(0, $_virtual_variation_inventory + $quantity);
+            update_post_meta($variation_id, '_virtual_variation_inventory', $new_inventory);
+            update_post_meta($variation_id, '_stock', $new_inventory);
+            
+            $_physical_variation_inventory = get_post_meta($variation_id, '_physical_variation_inventory', true);
+            $new_inventory_physical = max(0, $_physical_variation_inventory + $quantity);
+            update_post_meta($variation_id, '_physical_variation_inventory', $new_inventory_physical);
         }
     }
 }
@@ -594,14 +645,13 @@ function inventory_update_page_callback()
         'posts_per_page' => $products_per_page,
         'paged' => $paged,
     );
-    
+
     // Add search term to query if set
     if (!empty($search_query)) {
         $args['s'] = $search_query;
     }
-    $loop = new WP_Query($args);
+    $loop = new WP_Query($args); ?>
 
-    ?>
     <form method="get" class="inventory-update-search-form">
         <input type="hidden" name="post_type" value="product">
         <input type="hidden" name="page" value="inventory-update">
@@ -633,12 +683,12 @@ function inventory_update_page_callback()
                             <td>
                                 <?php echo $product_name; ?>
                                 <?php if ($product_type === 'variable') :
-                                    $available_variations = $product->get_available_variations();?>
+                                    $available_variations = $product->get_available_variations(); ?>
                                     <ul>
                                         <?php foreach ($available_variations as $variation) {
                                             $attributes = implode(', ', $variation['attributes']);
-                                            echo  '<li> '.esc_html($attributes).'</li>';
-                                        }?>
+                                            echo  '<li> ' . esc_html($attributes) . '</li>';
+                                        } ?>
                                     </ul>
                                 <?php endif; ?>
                             </td>
@@ -693,6 +743,8 @@ function inventory_update_page_callback()
             </table>
             <input type="submit" name="update_inventory" value="Update" class="button button-primary button-large">
         </form>
+
+
 <?php
         $total_pages = $loop->max_num_pages;
         if ($total_pages > 1) {
