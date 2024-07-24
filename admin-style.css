@@ -25,7 +25,10 @@
     color: #2271B1 ;
 } */
 
-
+.inventory-update-search-form {
+    text-align: right;
+    margin: 15px 0; 
+}
 .woocommerce_variation .form-row[data-id^="physical_variation_inventory"] {
     display: none;
 }

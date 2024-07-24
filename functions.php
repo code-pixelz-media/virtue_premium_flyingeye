@@ -364,7 +364,7 @@ function populate_inventory_column($column, $post_id)
                     <input type="button" class="button button-primary inven-submit-btn" value="update">
                 </div>
             </div>
-        <?php
+    <?php
         }
     }
 }
@@ -585,15 +585,31 @@ function inventory_update_page_callback()
     // Get the current page number
     $paged = (isset($_GET['paged']) && is_numeric($_GET['paged'])) ? intval($_GET['paged']) : 1;
 
+    // Get the search query
+    $search_query = isset($_GET['s']) ? sanitize_text_field($_GET['s']) : '';
+
     // Query WooCommerce products
     $args = array(
         'post_type' => 'product',
         'posts_per_page' => $products_per_page,
         'paged' => $paged,
     );
+    
+    // Add search term to query if set
+    if (!empty($search_query)) {
+        $args['s'] = $search_query;
+    }
     $loop = new WP_Query($args);
 
-    if ($loop->have_posts()) { ?>
+    ?>
+    <form method="get" class="inventory-update-search-form">
+        <input type="hidden" name="post_type" value="product">
+        <input type="hidden" name="page" value="inventory-update">
+        <input type="search" name="s" value="<?php echo esc_attr($search_query); ?>" placeholder="Search Products...">
+        <input type="submit" value="Search" class="button">
+    </form>
+
+    <?php if ($loop->have_posts()) { ?>
         <form method="post" class="shop-inventory-form">
             <?php wp_nonce_field('update_inventory_nonce'); ?>
             <table class="wp-list-table widefat striped table-view-list posts shop-inventory-table">
@@ -617,12 +633,14 @@ function inventory_update_page_callback()
                             <td>
                                 <?php echo $product_name; ?>
                                 <?php if ($product_type === 'variable') :
-                                    $available_variations = $product->get_available_variations();
-                                    foreach ($available_variations as $variation) {
-                                        $attributes = implode(', ', $variation['attributes']);
-                                        echo '<br>-- ' . esc_html($attributes);
-                                    }
-                                endif; ?>
+                                    $available_variations = $product->get_available_variations();?>
+                                    <ul>
+                                        <?php foreach ($available_variations as $variation) {
+                                            $attributes = implode(', ', $variation['attributes']);
+                                            echo  '<li> '.esc_html($attributes).'</li>';
+                                        }?>
+                                    </ul>
+                                <?php endif; ?>
                             </td>
                             <td>
                                 <?php if ($product_type === 'variable') :
