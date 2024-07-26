@@ -196,6 +196,69 @@ function update_stock_on_order_status_change($order_id, $old_status, $new_status
             update_post_meta($product_id, '_stock', $new_virtual_stock);
         }
     }
+
+    // Handle backward status changes
+    if (in_array($old_status, $physical_status_list)) {
+        $order = wc_get_order($order_id);
+        if (in_array($new_status, $virtual_status_list)) {
+            foreach ($order->get_items() as $item) {
+                $product_id = $item->get_product_id();
+                $quantity = $item->get_quantity();
+    
+                $physical_stock = get_post_meta($product_id, "_physical_stock", true);
+    
+                if (empty($physical_stock) || !is_numeric($physical_stock) || $physical_stock < 0) {
+                    continue; // Skip if stock is empty, not numeric, or less than 0
+                }
+    
+                $stock = (int)$physical_stock;
+                $new_stock = max(0, $stock + $quantity); // Ensure stock doesn't go below 0
+                update_post_meta($product_id, "_physical_stock", $new_stock);
+            }
+        } elseif (!in_array($new_status, $virtual_status_list) || !in_array($new_status, $physical_status_list)) {
+            foreach ($order->get_items() as $item) {
+                $product_id = $item->get_product_id();
+                $quantity = $item->get_quantity();
+    
+                $physical_stock = get_post_meta($product_id, "_physical_stock", true);
+                $virtual_stock = get_post_meta($product_id, "_virtual_stock", true);
+    
+                if (empty($physical_stock) || !is_numeric($physical_stock) || $physical_stock < 0) {
+                    continue; // Skip if stock is empty, not numeric, or less than 0
+                }
+    
+                $physical_stock = (int)$physical_stock;
+                $new_physical_stock = max(0, $physical_stock + $quantity); // Ensure stock doesn't go below 0
+                update_post_meta($product_id, "_physical_stock", $new_physical_stock);
+
+                if (empty($virtual_stock) || !is_numeric($virtual_stock) || $virtual_stock < 0) {
+                    continue; // Skip if stock is empty, not numeric, or less than 0
+                }
+                $virtual_stock = (int)$virtual_stock;
+                $new_virtual_stock = max(0, $virtual_stock + $quantity); // Ensure stock doesn't go below 0
+                update_post_meta($product_id, "_virtual_stock", $new_virtual_stock);
+                update_post_meta($product_id, "_stock", $new_virtual_stock);
+            }
+        }
+    } elseif (in_array($old_status, $virtual_status_list)) {
+        $order = wc_get_order($order_id);
+        if (!in_array($new_status, $virtual_status_list) || !in_array($new_status, $physical_status_list)) {
+            foreach ($order->get_items() as $item) {
+                $product_id = $item->get_product_id();
+                $quantity = $item->get_quantity();
+    
+                $virtual_stock = get_post_meta($product_id, "_virtual_stock", true);
+
+                if (empty($virtual_stock) || !is_numeric($virtual_stock) || $virtual_stock < 0) {
+                    continue; // Skip if stock is empty, not numeric, or less than 0
+                }
+                $virtual_stock = (int)$virtual_stock;
+                $new_virtual_stock = max(0, $virtual_stock + $quantity); // Ensure stock doesn't go below 0
+                update_post_meta($product_id, "_virtual_stock", $new_virtual_stock);
+                update_post_meta($product_id, "_stock", $new_virtual_stock);
+            }
+        }
+    }
 }
 
 // Add filter to prevent WooCommerce from reducing stock automatically
@@ -614,7 +677,7 @@ function inventory_update_page_callback()
                     if ($product && $product->is_type('variation')) {
                         update_post_meta($id, '_virtual_variation_inventory', $stock);
                     } else {
-                        update_post_meta($id, '_physical_stock', $stock);
+                        update_post_meta($id, '_virtual_stock', $stock);
                     }
                 }
             }
@@ -623,7 +686,8 @@ function inventory_update_page_callback()
             foreach ($_POST['default_inventory'] as $id => $stock) {
                 $stock = intval($stock);
                 if ($stock >= 0) {
-                    wc_update_product_stock($id, $stock);
+                    // wc_update_product_stock($id, $stock);
+                    update_post_meta($id, '_stock', $stock);
                 }
             }
         }
